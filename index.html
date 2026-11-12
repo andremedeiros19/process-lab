@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside Methane</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* layout: one dominant simulation viewport, instrument-style controls under it, then a single column of consequences */
+  color-scheme:dark;
+  --bg:#0a0d11; --panel:#10151b; --line:#202b35; --ink:#eef3f7; --mute:#8b9aa9;
+  --cyan:#5cc8f0; --cyan-dim:#2b6f8c; --warm:#f08a4b; --ok:#7fd6a8;
+  --display:"Instrument Serif",Georgia,serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+body{padding:0 clamp(16px,3vw,40px) 64px}
+main{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+header{padding-top:28px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(34px,5vw,54px);line-height:1;margin:0;letter-spacing:.01em}
+header p{margin:0;color:var(--mute);font-size:16px}
+h2{font-family:var(--display);font-weight:400;font-size:clamp(26px,3.2vw,36px);line-height:1.1;margin:0 0 6px;text-wrap:balance}
+.lede{color:var(--mute);max-width:66ch;margin:0 0 20px}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+canvas{display:block;width:100%}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* lab */
+.lab{display:flex;flex-direction:column;gap:14px;margin-top:-28px}
+.viewport{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:radial-gradient(120% 90% at 50% 40%,#111a22 0%,#0a0e13 70%)}
+#sim{height:min(64vh,620px);min-height:380px;cursor:crosshair;touch-action:manipulation}
+.hud{position:absolute;left:14px;top:12px;display:grid;grid-template-columns:auto auto;gap:2px 14px;font-size:12px;pointer-events:none;background:rgba(10,13,17,.55);padding:8px 10px;border-radius:4px}
+.hud dt{color:var(--mute)} .hud dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hud .src{grid-column:1/-1;color:var(--mute);font-size:10.5px;margin-top:4px;max-width:250px;line-height:1.35}
+.state{position:absolute;left:14px;bottom:12px;font-size:13px;pointer-events:none;max-width:60%}
+.state b{display:block;font-weight:500;font-size:15px}
+.state span{color:var(--mute)}
+.concept{position:absolute;right:14px;bottom:12px;pointer-events:none}
+.pair{position:absolute;right:14px;top:12px;width:236px;background:rgba(12,17,22,.86);border:1px solid var(--line);border-radius:4px;padding:10px 12px;font-size:12px;display:none}
+.pair.on{display:block}
+.pair h3{margin:0 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:500;color:var(--mute);display:flex;justify-content:space-between;align-items:center}
+.pair h3 button{background:none;border:0;color:var(--mute);padding:0 2px;font-size:15px;line-height:1}
+.pair dl{display:grid;grid-template-columns:auto auto;gap:2px 10px;margin:0 0 6px}
+.pair dt{color:var(--mute)} .pair dd{margin:0;text-align:right;font-family:var(--mono)}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
+.pill.att{color:var(--cyan)} .pill.rep{color:var(--warm)} .pill.neg{color:var(--mute)}
+#ljc{height:110px;margin-top:8px}
+.controls{display:grid;grid-template-columns:1.5fr 1fr auto;gap:18px 28px;align-items:end}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--mute);margin-bottom:4px}
+.ctl label output{font-family:var(--mono);font-size:20px;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--cyan);margin:0;height:22px}
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.presets button{background:none;border:1px solid var(--line);border-radius:3px;padding:2px 7px;font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.presets button:hover,.presets button.on{color:var(--ink);border-color:var(--cyan-dim)}
+.actions{display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:210px}
+.btn{background:var(--cyan);color:#06222e;border:0;border-radius:4px;padding:9px 16px;font-weight:600}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line);font-weight:400}
+.toggle{display:flex;gap:8px;align-items:center;font-size:13px}
+.toggle input{accent-color:var(--cyan);width:16px;height:16px}
+.fnote{font-size:12.5px;color:var(--mute);max-width:80ch;margin:0}
+
+/* ladder */
+.ladder{display:grid;gap:0;border-top:1px solid var(--line)}
+.rung{display:grid;grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr);gap:16px;padding:14px 0;border-bottom:1px solid var(--line);align-items:center}
+.rung .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-family:var(--mono)}
+.rung .what{font-size:16px}
+.rung .arrow{color:var(--cyan-dim);font-size:18px;text-align:center;animation:nudge 2.4s ease-in-out infinite}
+.rung .val{font-family:var(--mono);font-size:18px}
+.rung .val small{display:block;font-family:var(--body);font-size:12.5px;color:var(--mute)}
+@keyframes nudge{50%{transform:translateX(4px);color:var(--cyan)}}
+
+/* cp */
+.cpgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+#cpc{height:380px;cursor:ew-resize;touch-action:none;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.models{display:flex;flex-direction:column;gap:10px}
+.model{display:grid;grid-template-columns:14px 1fr auto;gap:2px 10px;align-items:baseline;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.model i{width:14px;height:3px;border-radius:2px;align-self:center}
+.model b{font-weight:500}.model .v{font-family:var(--mono);font-size:17px}
+.model p{grid-column:2/-1;margin:0;color:var(--mute);font-size:12.5px}
+.warn{font-size:12.5px;color:var(--warm);border-left:2px solid var(--warm);padding:2px 0 2px 10px;margin:0}
+.warn b{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;display:block}
+#warns{display:flex;flex-direction:column;gap:8px}
+
+/* worlds */
+.worlds{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.world{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.world canvas{height:240px;background:radial-gradient(120% 90% at 50% 40%,#111a22 0%,#0a0e13 75%)}
+.world .body{padding:14px 16px}
+.world h3{margin:0 0 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:500}
+.world ul{list-style:none;margin:0;padding:0;font-family:var(--mono);font-size:12.5px;display:flex;flex-direction:column;gap:3px}
+.world li.miss{color:var(--warm)} .world li.has{color:var(--cyan)}
+.world .cpv{margin-top:10px;font-family:var(--mono);font-size:20px}
+.world .cpv small{font-family:var(--body);font-size:12px;color:var(--mute);display:block}
+.same{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:var(--mono);font-size:12.5px;color:var(--mute);margin-top:16px}
+.same b{color:var(--ink);font-weight:400}
+
+/* load */
+.load{display:grid;grid-template-columns:260px minmax(0,1fr);gap:32px;align-items:start}
+.form{display:grid;gap:12px}
+.form label{display:grid;gap:3px;font-size:12px;color:var(--mute)}
+.form input{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:7px 9px;font-family:var(--mono);font-size:15px;width:100%}
+.chain{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-bottom:22px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.chain div{padding:12px 14px;border-right:1px solid var(--line);background:var(--panel)}
+.chain div:last-child{border-right:0}
+.chain .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-family:var(--mono)}
+.chain .v{font-family:var(--mono);font-size:17px;margin-top:2px}
+.chain .v small{display:block;font-size:11.5px;color:var(--mute);font-family:var(--body)}
+.chain.run div{animation:lit .9s ease both}.chain.run div:nth-child(2){animation-delay:.35s}.chain.run div:nth-child(3){animation-delay:.7s}.chain.run div:nth-child(4){animation-delay:1.05s}
+@keyframes lit{0%{background:#17303c}100%{background:var(--panel)}}
+.bars{display:grid;gap:12px}
+.bar{display:grid;grid-template-columns:150px minmax(0,1fr) 150px;gap:12px;align-items:center;font-size:13px}
+.bar .track{height:14px;background:var(--panel);border-radius:2px;overflow:hidden}
+.bar .fill{height:100%;border-radius:2px;transition:width .6s ease}
+.bar .q{font-family:var(--mono);text-align:right}
+.bar .q small{color:var(--mute);margin-left:6px}
+.closing{border-top:1px solid var(--line);padding-top:28px;display:grid;gap:14px}
+.closing blockquote{margin:0;font-family:var(--display);font-size:clamp(24px,3.4vw,38px);line-height:1.15;max-width:22ch}
+.closing p{color:var(--mute);font-size:12.5px;max-width:80ch;margin:0}
+@media (max-width:860px){
+  .controls{grid-template-columns:1fr}.cpgrid,.worlds,.load{grid-template-columns:1fr}
+  .chain{grid-template-columns:1fr 1fr}.chain div:nth-child(2){border-right:0}.chain div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .rung{grid-template-columns:1fr}.rung .arrow{display:none}
+  .pair{position:static;width:auto;border-width:1px 0 0;border-radius:0}
+  .hud{font-size:11px}.hud .src{display:none}.concept{display:none}.state{max-width:90%}
+  .bar{grid-template-columns:1fr}.bar .q{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){.rung .arrow,.chain.run div{animation:none}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Inside Methane</h1>
+  <p>How molecular interactions become thermodynamic properties</p>
+</header>
+
+<section class="lab" aria-label="Molecular laboratory">
+  <div class="viewport">
+    <canvas id="sim" aria-label="Methane molecules moving and interacting. Click a molecule to inspect its nearest pair."></canvas>
+    <dl class="hud" id="hud">
+      <dt>Translational kinetic energy</dt><dd id="hKE"></dd>
+      <dt>Interaction energy</dt><dd id="hU"></dd>
+      <dt>Thermal + interaction energy</dt><dd id="hE"></dd>
+      <dt>Mean molecular speed</dt><dd id="hV"></dd>
+      <dt>Mean spacing</dt><dd id="hD"></dd>
+      <dt>Cp, real vs ideal gas</dt><dd id="hCp"></dd>
+      <div class="src">Energies per mole, relative to the ideal gas at 0 K. Kinetic theory and RRHO for the ideal part, Peng-Robinson for the interaction part.</div>
+    </dl>
+    <div class="state"><b id="stTitle"></b><span id="stSub"></span></div>
+    <div class="concept tag">Conceptual molecular simulation · 2-D Lennard-Jones · spacing compressed for display</div>
+    <aside class="pair" id="pair" aria-live="polite">
+      <h3>Selected pair <button id="pairClose" aria-label="Close pair inspector">×</button></h3>
+      <dl>
+        <dt>Distance r</dt><dd id="pR"></dd>
+        <dt>Potential U(r)</dt><dd id="pU"></dd>
+        <dt>Force F(r), + repulsive</dt><dd id="pF"></dd>
+      </dl>
+      <span class="pill" id="pState"></span> <span id="pNote" style="color:var(--mute);margin-left:4px"></span>
+      <canvas id="ljc" aria-label="Lennard-Jones potential with the current pair distance marked"></canvas>
+    </aside>
+  </div>
+
+  <div class="controls">
+    <div class="ctl">
+      <label for="tS">Temperature <output id="tO"></output></label>
+      <input type="range" id="tS" min="50" max="2000" step="1" value="298">
+      <div class="presets" id="tP"></div>
+    </div>
+    <div class="ctl">
+      <label for="pS">Pressure <output id="pO"></output></label>
+      <input type="range" id="pS" min="0" max="2" step="0.005" value="1.477">
+      <div class="presets" id="pP"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="runBtn">Run experiment</button>
+      <button class="btn ghost" id="pickBtn">Inspect closest pair</button>
+      <label class="toggle"><input type="checkbox" id="fT" checked> Show intermolecular forces</label>
+      <label class="toggle"><input type="checkbox" id="playT" checked> Animate</label>
+    </div>
+  </div>
+  <p class="fnote" id="fnote">The intermolecular potential remains present; its relative influence on the thermodynamic behavior decreases as thermal motion dominates. Temperature sets molecular kinetic energy. Pressure sets molecular proximity.</p>
+</section>
+
+<section>
+  <h2>From molecules to thermodynamics</h2>
+  <p class="lede">The same state, read twice: what the molecules are doing, and the number that follows from it. Values update with the temperature and pressure above.</p>
+  <div class="ladder">
+    <div class="rung"><div><div class="k">Molecular motion</div><div class="what" id="l1w"></div></div><div class="arrow">→</div><div class="val" id="l1v"></div></div>
+    <div class="rung"><div><div class="k">Proximity</div><div class="what" id="l2w"></div></div><div class="arrow">→</div><div class="val" id="l2v"></div></div>
+    <div class="rung"><div><div class="k">Interaction energy</div><div class="what" id="l3w"></div></div><div class="arrow">→</div><div class="val" id="l3v"></div></div>
+    <div class="rung"><div><div class="k">Heat capacity</div><div class="what" id="l4w"></div></div><div class="arrow">→</div><div class="val" id="l4v"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>What does the molecular behavior do to Cp?</h2>
+  <p class="lede">Drag across the chart to move the temperature. The simulation above follows: both are views of the same experiment.</p>
+  <div class="cpgrid">
+    <canvas id="cpc" aria-label="Heat capacity of methane against temperature for three models"></canvas>
+    <div class="models">
+      <div class="model"><i style="background:var(--cyan)"></i><b>RRHO</b><span class="v" id="mR"></span><p>Statistical-mechanical idealized model. One isolated molecule: translation, rotation, harmonic vibration.</p></div>
+      <div class="model"><i style="background:#e8eef3"></i><b>Shomate</b><span class="v" id="mS"></span><p>Ideal-gas correlation fitted to NIST-JANAF tables, 298 to 6000 K.</p></div>
+      <div class="model"><i style="background:var(--warm)"></i><b>Real gas</b><span class="v" id="mG"></span><p>Ideal-gas Cp plus the Peng-Robinson residual at the selected pressure. <span id="mDev"></span></p></div>
+      <div id="warns"></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Why does RRHO deviate?</h2>
+  <p class="lede">Same temperature, same pressure, two worlds. On the left the molecules do not know the others exist. On the right they interact through the intermolecular potential.</p>
+  <div class="worlds">
+    <div class="world">
+      <canvas id="wA" aria-label="Independent methane molecules passing through each other"></canvas>
+      <div class="body">
+        <h3>RRHO world</h3>
+        <ul><li class="has">+ translation</li><li class="has">+ rotation</li><li class="has">+ vibration</li><li class="miss">× intermolecular interaction: not included</li></ul>
+        <div class="cpv"><span id="wAcp"></span><small>Cp, independent molecules</small></div>
+      </div>
+    </div>
+    <div class="world">
+      <canvas id="wB" aria-label="Methane molecules attracting and repelling each other"></canvas>
+      <div class="body">
+        <h3>Real-gas world</h3>
+        <ul><li class="has">+ translation</li><li class="has">+ rotation</li><li class="has">+ vibration</li><li class="has">+ intermolecular interactions</li></ul>
+        <div class="cpv"><span id="wBcp"></span><small id="wBsub">Cp, interacting molecules</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="same"><b>Same T, same P</b> → different molecular energy landscape → different thermodynamic response → <b id="sameCp"></b></div>
+  <p class="fnote" style="margin-top:14px">RRHO describes molecular degrees of freedom, but does not explicitly include intermolecular interactions. Its gap to the real gas is the missing interaction term, and it closes when the pressure falls or the temperature rises.</p>
+</section>
+
+<section>
+  <h2>Engineering consequence</h2>
+  <p class="lede">A heater takes methane from T₁ to T₂. The duty is the area under Cp(T), so the difference between the Cp curves becomes megawatts.</p>
+  <div class="load">
+    <form class="form" id="loadForm">
+      <label for="iM">Mass flow rate ṁ (kg/s)<input id="iM" type="number" step="any" min="0" value="16.043"></label>
+      <label for="iT1">Inlet T₁ (K)<input id="iT1" type="number" step="any" min="50" max="2000" value="298.15"></label>
+      <label for="iT2">Outlet T₂ (K)<input id="iT2" type="number" step="any" min="50" max="2000" value="643.15"></label>
+      <label for="iP">Pressure P (bar)<input id="iP" type="number" step="any" min="1" max="100" value="30"></label>
+      <button class="btn" type="submit">Calculate duty</button>
+      <p class="fnote">Defaults: 1 kmol/s of methane, 25 to 370 °C at 30 bar, a steam-reformer feed preheater.</p>
+    </form>
+    <div>
+      <div class="chain" id="chain">
+        <div><div class="k">Molecular interaction</div><div class="v" id="c1"></div></div>
+        <div><div class="k">Mean Cp over the range</div><div class="v" id="c2"></div></div>
+        <div><div class="k">ΔH = ∫ Cp dT</div><div class="v" id="c3"></div></div>
+        <div><div class="k">Q̇ = ṁ ΔH</div><div class="v" id="c4"></div></div>
+      </div>
+      <div class="bars" id="bars"></div>
+      <div id="loadWarn" style="margin-top:14px;display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+  </div>
+</section>
+
+<section class="closing">
+  <blockquote>Intermolecular forces are microscopic. Their consequences can be macroscopic.</blockquote>
+  <p>Molecules → interactions → energy → Cp → enthalpy → thermal load.</p>
+  <p><b style="color:var(--ink);font-weight:500">Model validity.</b> Shomate correlations describe ideal-gas standard-state heat capacity and have defined validity ranges. RRHO is an idealized molecular model. Real-gas behavior requires appropriate non-ideal corrections or reference data. Here the real gas is the Peng-Robinson equation of state (Tc 190.56 K, Pc 45.99 bar, ω 0.0114): an engineering model, not experimental data. It reproduces the NIST reference Cp of methane at 30 bar within about 0.5 % between 300 and 620 K. The moving molecules are a two-dimensional Lennard-Jones sketch (ε/k 148 K, σ 3.73 Å) with spacing compressed for display; the numbers on this page come from the thermodynamic models, not from the animation.</p>
+  <p>Sources: NIST Chemistry WebBook (Shomate coefficients, Chase 1998); NIST CCCBDB (vibrational frequencies 2917, 1534, 3019, 1306 cm⁻¹); Peng and Robinson, 1976.</p>
+</section>
+</main>
+
+<script>
+// ---------- ThermodynamicModel: constants ----------
+const R = 8.314462618;            // J/mol/K
+const MW = 16.043;                // g/mol
+const NA = 6.02214076e23;
+const TC = 190.564, PC = 45.992, OMEGA = 0.01142;   // methane critical constants (K, bar)
+const T_TRIPLE = 90.694;          // K
+const LJ_EPS_K = 148.0, LJ_SIG_A = 3.73;            // Lennard-Jones CH4: eps/k (K), sigma (angstrom)
+const LJ_EPS_KJ = LJ_EPS_K * R / 1000;              // kJ/mol
+const LJ_F_PN = (LJ_EPS_K * 1.380649e-23) / (LJ_SIG_A * 1e-10) * 1e12; // eps/sigma in pN
+
+// ---------- CpModel: RRHO ----------
+const C2 = 1.438776877;           // hc/k, cm K
+const MODES = [[2917, 1], [1534, 2], [3019, 3], [1306, 3]]; // cm-1, degeneracy (NIST CCCBDB)
+function cpRRHO(T) {
+  let s = 4 * R;
+  for (const [nu, g] of MODES) { const x = C2 * nu / T; if (x < 300) { const e = Math.exp(x); s += R * g * x * x * e / ((e - 1) * (e - 1)); } }
+  return s;
+}
+function hRRHO(T) { // H(T) - H(0 K), J/mol
+  let s = 4 * R * T;
+  for (const [nu, g] of MODES) { const th = C2 * nu, x = th / T; if (x < 300) s += R * g * th / (Math.exp(x) - 1); }
+  return s;
+}
+// ---------- CpModel: Shomate (NIST WebBook, Chase 1998) ----------
+const SH = [
+  { lo: 298, hi: 1300, c: [-0.703029, 108.4773, -42.52157, 5.862788, 0.678565, -76.84376, -74.8731] },
+  { lo: 1300, hi: 6000, c: [85.81217, 11.26467, -2.114146, 0.13819, -26.42221, -153.5327, -74.8731] }
+];
+const SH_LO = 298, SH_HI = 6000;
+function shSet(T) { return T <= 1300 ? SH[0].c : SH[1].c; }
+function cpShomate(T) { const [A, B, C, D, E] = shSet(T), t = T / 1000; return A + B * t + C * t * t + D * t * t * t + E / (t * t); }
+function hShomate(T) { // H(T) - H(298.15), J/mol
+  const [A, B, C, D, E, F, H] = shSet(T), t = T / 1000;
+  return (A * t + B * t * t / 2 + C * t * t * t / 3 + D * t * t * t * t / 4 - E / t + F - H) * 1000;
+}
+// ideal-gas enthalpy relative to 298.15 K, valid over the whole slider range
+function hIdeal(T) { return T >= 298.15 ? hShomate(T) : hRRHO(T) - hRRHO(298.15); }
+function cpIdeal(T) { return T >= 298.15 ? cpShomate(T) : cpRRHO(T); }
+
+// ---------- RealGasModel: Peng-Robinson equation of state ----------
+const PR_AC = 0.45724 * R * R * TC * TC / (PC * 1e5), PR_B = 0.07780 * R * TC / (PC * 1e5);
+const PR_K = 0.37464 + 1.54226 * OMEGA - 0.26992 * OMEGA * OMEGA;
+function cubicRoots(a2, a1, a0) { // z^3 + a2 z^2 + a1 z + a0 = 0, real roots
+  const q = (3 * a1 - a2 * a2) / 9, r = (9 * a2 * a1 - 27 * a0 - 2 * a2 * a2 * a2) / 54, d = q * q * q + r * r;
+  if (d > 0) { const s = Math.cbrt(r + Math.sqrt(d)), t = Math.cbrt(r - Math.sqrt(d)); return [s + t - a2 / 3]; }
+  const th = Math.acos(Math.max(-1, Math.min(1, r / Math.sqrt(-q * q * q)))), m = 2 * Math.sqrt(-q);
+  return [m * Math.cos(th / 3) - a2 / 3, m * Math.cos((th + 2 * Math.PI) / 3) - a2 / 3, m * Math.cos((th + 4 * Math.PI) / 3) - a2 / 3];
+}
+function prState(T, Pbar) {
+  const P = Pbar * 1e5, sa = 1 + PR_K * (1 - Math.sqrt(T / TC)), alpha = sa * sa;
+  const a = PR_AC * alpha, dadT = -PR_AC * PR_K * sa / Math.sqrt(T * TC);
+  const A = a * P / (R * R * T * T), B = PR_B * P / (R * T), s2 = Math.SQRT2;
+  const roots = cubicRoots(-(1 - B), A - 3 * B * B - 2 * B, -(A * B - B * B - B * B * B)).filter(z => z > B).sort((x, y) => x - y);
+  const lnphi = Z => Z - 1 - Math.log(Z - B) - A / (2 * s2 * B) * Math.log((Z + (1 + s2) * B) / (Z + (1 - s2) * B));
+  let Z, phase;
+  if (roots.length >= 2) {
+    const zl = roots[0], zv = roots[roots.length - 1];
+    if (lnphi(zl) < lnphi(zv)) { Z = zl; phase = 'liquid'; } else { Z = zv; phase = 'gas'; }
+  } else {
+    Z = roots[0];
+    const Vc = 0.3074 * R * TC / (PC * 1e5), V = Z * R * T / P;
+    phase = T >= TC ? (Pbar >= PC ? 'supercritical' : 'gas') : (V < Vc ? 'liquid' : 'gas');
+  }
+  if (T < T_TRIPLE) phase = 'solid';
+  const L = Math.log((Z + (1 + s2) * B) / (Z + (1 - s2) * B));
+  const Hres = R * T * (Z - 1) + (T * dadT - a) / (2 * s2 * PR_B) * L;   // J/mol
+  const Ures = Hres - R * T * (Z - 1);
+  const Vm = Z * R * T / P;                                             // m3/mol
+  return { Z, phase, Hres, Ures, Vm };
+}
+const isFluidGas = ph => ph === 'gas' || ph === 'supercritical';
+function cpResidual(T, P) { // J/mol/K, numerical dHres/dT at constant P
+  const h = 0.25, s0 = prState(T, P), a = prState(T - h, P), b = prState(T + h, P);
+  if (a.phase === s0.phase && b.phase === s0.phase) return (b.Hres - a.Hres) / (2 * h);
+  if (b.phase === s0.phase) return (b.Hres - s0.Hres) / h;
+  return (s0.Hres - a.Hres) / h;
+}
+function cpReal(T, P) { return cpIdeal(T) + cpResidual(T, P); }
+
+// ---------- MolecularModel: kinetic theory + mapping to the simulation ----------
+function meanSpeed(T) { return Math.sqrt(8 * R * T / (Math.PI * MW / 1000)); }   // m/s
+function meanSpacingA(Vm) { return Math.cbrt(Vm / NA) * 1e10; }                // angstrom
+function ljU(r) { const s6 = Math.pow(1 / r, 6); return 4 * (s6 * s6 - s6); } // reduced
+function ljF(r) { const s6 = Math.pow(1 / r, 6); return 24 * (2 * s6 * s6 - s6) / r; } // reduced, + = repulsive
+
+// ---------- ThermalLoadModel ----------
+function thermalLoad(mdot, T1, T2, P) { // kg/s, K, K, bar -> W
+  const n = mdot / (MW / 1000);
+  const dShom = (T1 >= SH_LO && T2 >= SH_LO) ? hShomate(T2) - hShomate(T1) : null;
+  const dRRHO = hRRHO(T2) - hRRHO(T1);
+  const s1 = prState(T1, P), s2 = prState(T2, P);
+  const realOK = isFluidGas(s1.phase) && isFluidGas(s2.phase);
+  const dReal = realOK ? hIdeal(T2) - hIdeal(T1) + s2.Hres - s1.Hres : null;
+  return { n, dShom, dRRHO, dReal, qShom: dShom === null ? null : n * dShom, qRRHO: n * dRRHO, qReal: dReal === null ? null : n * dReal, ph1: s1.phase, ph2: s2.phase };
+}
+
+
+// ---------- shared state ----------
+const S = { T: 298.15, P: 30, forces: true, play: !matchMedia('(prefers-reduced-motion:reduce)').matches, sel: null };
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v.toFixed(d).replace('-', '−');
+const sgn = (v, d = 1) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
+
+// ---------- MolecularModel: conceptual 2-D Lennard-Jones simulation (reduced units) ----------
+function displaySpacing(dA) { const d = Math.max(dA / LJ_SIG_A, 1.1); return 1.25 + 3.4 * (1 - Math.exp(-(d - 1.1) / 3.5)); }
+const D_MAX = 4.65, RMIN = Math.pow(2, 1 / 6);
+class Sim {
+  constructor(n, interacting, aspect) {
+    this.n = n; this.int = interacting; this.aspect = aspect; this.d = 3; this.setBox(true);
+    this.x = new Float64Array(n); this.y = new Float64Array(n); this.vx = new Float64Array(n); this.vy = new Float64Array(n);
+    this.fx = new Float64Array(n); this.fy = new Float64Array(n); this.u = new Float64Array(n);
+    this.a = new Float64Array(n); this.b = new Float64Array(n); this.wa = new Float64Array(n); this.wb = new Float64Array(n);
+    const cols = Math.ceil(Math.sqrt(n * aspect)), rows = Math.ceil(n / cols);
+    for (let i = 0; i < n; i++) {
+      this.x[i] = (i % cols + 0.5) / cols * this.Lx + (Math.random() - .5) * .2; this.y[i] = (Math.floor(i / cols) + 0.5) / rows * this.Ly + (Math.random() - .5) * .2;
+      const th = Math.random() * 6.283; this.vx[i] = Math.cos(th) * 2; this.vy[i] = Math.sin(th) * 2;
+      this.a[i] = Math.random() * 6.283; this.b[i] = Math.random() * 6.283; this.wa[i] = (Math.random() - .5) * 2; this.wb[i] = (Math.random() - .5) * 2;
+    }
+    this.pairs = [];
+  }
+  setBox(snap) {
+    const Lx = Math.sqrt(this.n * this.d * this.d * this.aspect), Ly = Lx / this.aspect;
+    if (snap) { this.Lx = Lx; this.Ly = Ly; } this.tLx = Lx; this.tLy = Ly;
+  }
+  setState(T, P) { const st = prState(T, P); this.Ts = T / LJ_EPS_K; this.d = displaySpacing(meanSpacingA(st.Vm)); this.setBox(false); }
+  forces() {
+    const n = this.n, x = this.x, y = this.y, fx = this.fx, fy = this.fy, u = this.u; fx.fill(0); fy.fill(0); u.fill(0); this.pairs.length = 0;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const dx = x[j] - x[i], dy = y[j] - y[i], r2 = dx * dx + dy * dy; if (r2 > 9) continue;
+      const r = Math.sqrt(r2); this.pairs.push(i, j, r);
+      if (!this.int) continue;
+      const rc = Math.max(r, 0.82), f = ljF(rc), uu = ljU(rc);
+      fx[i] -= f * dx / r; fy[i] -= f * dy / r; fx[j] += f * dx / r; fy[j] += f * dy / r; u[i] += uu / 2; u[j] += uu / 2;
+    }
+  }
+  step(dtFrame) {
+    // box relaxes toward the target density
+    const k = 0.06, nLx = this.Lx + (this.tLx - this.Lx) * k, sc = nLx / this.Lx;
+    if (Math.abs(sc - 1) > 1e-6) { for (let i = 0; i < this.n; i++) { this.x[i] *= sc; this.y[i] *= sc; } this.Lx = nLx; this.Ly = nLx / this.aspect; }
+    const vmax = Math.sqrt(2 * this.Ts) * 2.5 + 1, sub = Math.max(1, Math.ceil(dtFrame / Math.min(0.004, 0.012 / vmax))), dt = dtFrame / sub, n = this.n;
+    for (let s = 0; s < sub; s++) {
+      for (let i = 0; i < n; i++) { this.vx[i] += this.fx[i] * dt / 2; this.vy[i] += this.fy[i] * dt / 2; this.x[i] += this.vx[i] * dt; this.y[i] += this.vy[i] * dt;
+        const m = 0.45;
+        if (this.x[i] < m) { this.x[i] = m; this.vx[i] = Math.abs(this.vx[i]); } else if (this.x[i] > this.Lx - m) { this.x[i] = this.Lx - m; this.vx[i] = -Math.abs(this.vx[i]); }
+        if (this.y[i] < m) { this.y[i] = m; this.vy[i] = Math.abs(this.vy[i]); } else if (this.y[i] > this.Ly - m) { this.y[i] = this.Ly - m; this.vy[i] = -Math.abs(this.vy[i]); } }
+      this.forces();
+      for (let i = 0; i < n; i++) { this.vx[i] += this.fx[i] * dt / 2; this.vy[i] += this.fy[i] * dt / 2; }
+    }
+    // thermostat: temperature -> molecular kinetic energy
+    let ke = 0; for (let i = 0; i < n; i++) ke += this.vx[i] * this.vx[i] + this.vy[i] * this.vy[i];
+    const Ti = ke / (2 * n) || 1e-6, lam = Math.sqrt(1 + 0.15 * (this.Ts / Ti - 1));
+    const wr = Math.sqrt(this.Ts) * dtFrame * 1.6;
+    for (let i = 0; i < n; i++) { this.vx[i] *= lam; this.vy[i] *= lam; this.a[i] += this.wa[i] * wr; this.b[i] += this.wb[i] * wr; }
+  }
+}
+
+// ---------- VisualizationEngine ----------
+function fit(c) { const r = c.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2); c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); return { g, W: r.width, H: r.height }; }
+const TET = [[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]].map(v => v.map(c => c / Math.sqrt(3)));
+function ball(g, x, y, r, c0, c1) { const gr = g.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); gr.addColorStop(0, c0); gr.addColorStop(1, c1); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill(); }
+function drawMol(g, px, py, s, a, b, alpha, halo) {
+  const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), bond = 0.3 * s, hs = [];
+  for (const [x, y, z] of TET) { const y1 = y * ca - z * sa, z1 = y * sa + z * ca, x2 = x * cb + z1 * sb, z2 = -x * sb + z1 * cb; hs.push([x2, y1, z2]); }
+  hs.sort((p, q) => p[2] - q[2]);
+  g.globalAlpha = alpha;
+  if (halo > 0.01) { g.strokeStyle = `rgba(92,200,240,${Math.min(.5, halo)})`; g.lineWidth = 1; g.beginPath(); g.arc(px, py, 0.5 * s, 0, 6.2832); g.stroke(); }
+  const drawH = h => { const k = 1 + .22 * h[2], hx = px + h[0] * bond, hy = py + h[1] * bond;
+    g.strokeStyle = 'rgba(190,215,230,.75)'; g.lineWidth = Math.max(1, s * .045); g.beginPath(); g.moveTo(px, py); g.lineTo(hx, hy); g.stroke();
+    ball(g, hx, hy, 0.105 * s * k, '#ffffff', h[2] < 0 ? '#6f8797' : '#a9c0cf'); };
+  for (const h of hs) if (h[2] < 0) drawH(h);
+  ball(g, px, py, 0.17 * s, '#9be2ff', '#12506e');
+  for (const h of hs) if (h[2] >= 0) drawH(h);
+  g.globalAlpha = 1;
+}
+function drawScene(g, W, H, sim, cam, opt) {
+  g.clearRect(0, 0, W, H);
+  const X = x => (x - cam.cx) * cam.s + W / 2, Y = y => (y - cam.cy) * cam.s + H / 2, s = cam.s;
+  // spatial field + container
+  g.strokeStyle = 'rgba(120,160,190,.07)'; g.lineWidth = 1; g.beginPath();
+  for (let i = 0; i <= Math.ceil(sim.Lx); i++) { g.moveTo(X(i), Y(0)); g.lineTo(X(i), Y(sim.Ly)); }
+  for (let j = 0; j <= Math.ceil(sim.Ly); j++) { g.moveTo(X(0), Y(j)); g.lineTo(X(sim.Lx), Y(j)); } g.stroke();
+  g.strokeStyle = 'rgba(140,180,205,.28)'; g.strokeRect(X(0), Y(0), sim.Lx * s, sim.Ly * s);
+  const sel = opt.sel, dim = sel ? .32 : 1, p = sim.pairs;
+  if (opt.forces && sim.int) for (let k = 0; k < p.length; k += 3) {
+    const i = p[k], j = p[k + 1], r = p[k + 2]; if (r > 2.6) continue;
+    const u = ljU(Math.max(r, .82)), rep = r < RMIN, isSel = sel && ((sel[0] === i && sel[1] === j) || (sel[0] === j && sel[1] === i));
+    const st = rep ? Math.min(1, .35 + ljF(Math.max(r, .82)) / 30) : Math.min(.85, Math.abs(u) * .85);
+    if (st < .03) continue;
+    g.strokeStyle = rep ? `rgba(240,138,75,${st * (isSel ? 1 : dim)})` : `rgba(92,200,240,${st * (isSel ? 1 : dim)})`;
+    g.lineWidth = 1 + 2.2 * st; g.setLineDash(rep ? [] : [s * .09, s * .07]);
+    g.beginPath(); g.moveTo(X(sim.x[i]), Y(sim.y[i])); g.lineTo(X(sim.x[j]), Y(sim.y[j])); g.stroke();
+  }
+  g.setLineDash([]);
+  for (let i = 0; i < sim.n; i++) {
+    const on = !sel || sel[0] === i || sel[1] === i;
+    drawMol(g, X(sim.x[i]), Y(sim.y[i]), s, sim.a[i], sim.b[i], on ? 1 : .3, opt.forces && sim.int ? Math.min(.5, -sim.u[i] * .5) + .06 : .06);
+  }
+  if (sel && sim.int) { // force vectors on the selected pair
+    const [i, j] = sel, dx = sim.x[j] - sim.x[i], dy = sim.y[j] - sim.y[i], r = Math.hypot(dx, dy), f = ljF(Math.max(r, .82));
+    const len = Math.max(-1, Math.min(1, f / 2.4)) * s * .55; if (Math.abs(len) > 2) {
+      g.strokeStyle = g.fillStyle = f > 0 ? '#f08a4b' : '#5cc8f0'; g.lineWidth = 2;
+      for (const [k, dir] of [[i, -1], [j, 1]]) { const ux = dx / r * dir, uy = dy / r * dir, x0 = X(sim.x[k]), y0 = Y(sim.y[k]), x1 = x0 + ux * len, y1 = y0 + uy * len, sg = Math.sign(len);
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+        g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 - sg * ux * 7 - uy * 4, y1 - sg * uy * 7 + ux * 4); g.lineTo(x1 - sg * ux * 7 + uy * 4, y1 - sg * uy * 7 - ux * 4); g.fill(); }
+    }
+  }
+}
+
+// ---------- main lab ----------
+const simC = $('sim'); let simV = fit(simC);
+let lab = new Sim(simV.W < 560 ? 18 : 30, true, simV.W / simV.H); lab.setState(S.T, S.P); lab.setBox(true); lab.forces();
+const cam = { cx: lab.Lx / 2, cy: lab.Ly / 2, s: 30 };
+function camTarget(sim, W, H, sel) {
+  const LxM = Math.sqrt(sim.n * D_MAX * D_MAX * sim.aspect), s0 = W / LxM * .96, sBox = s0 * Math.sqrt(LxM / sim.Lx);
+  if (sel) return { cx: (sim.x[sel[0]] + sim.x[sel[1]]) / 2, cy: (sim.y[sel[0]] + sim.y[sel[1]]) / 2, s: Math.max(sBox, Math.min(sBox * 2.2, Math.min(W, H) / (Math.hypot(sim.x[sel[0]] - sim.x[sel[1]], sim.y[sel[0]] - sim.y[sel[1]]) + 2.5))) };
+  return { cx: sim.Lx / 2, cy: sim.Ly / 2, s: sBox };
+}
+function nearest(i) { let b = -1, bd = 1e9; for (let j = 0; j < lab.n; j++) if (j !== i) { const d = Math.hypot(lab.x[j] - lab.x[i], lab.y[j] - lab.y[i]); if (d < bd) { bd = d; b = j; } } return b; }
+function closestPair() { let bi = 0, bj = 1, bd = 1e9; for (let i = 0; i < lab.n; i++) for (let j = i + 1; j < lab.n; j++) { const d = Math.hypot(lab.x[j] - lab.x[i], lab.y[j] - lab.y[i]); if (d < bd) { bd = d; bi = i; bj = j; } } return [bi, bj]; }
+simC.addEventListener('click', e => {
+  const r = simC.getBoundingClientRect(), wx = (e.clientX - r.left - simV.W / 2) / cam.s + cam.cx, wy = (e.clientY - r.top - simV.H / 2) / cam.s + cam.cy;
+  let b = -1, bd = .75; for (let i = 0; i < lab.n; i++) { const d = Math.hypot(lab.x[i] - wx, lab.y[i] - wy); if (d < bd) { bd = d; b = i; } }
+  S.sel = b < 0 ? null : [b, nearest(b)]; $('pair').classList.toggle('on', !!S.sel); if (S.sel) ljV = fit($('ljc'));
+});
+$('pairClose').onclick = () => { S.sel = null; $('pair').classList.remove('on'); };
+$('pickBtn').onclick = () => { S.sel = closestPair(); $('pair').classList.add('on'); ljV = fit($('ljc')); };
+
+let ljV = null;
+function drawLJ(r) {
+  if (!ljV) return; const { g, W, H } = ljV, x0 = 30, x1 = W - 6, y0 = 6, y1 = H - 18, X = v => x0 + (v - .9) / 2.1 * (x1 - x0), Y = v => y0 + (1.4 - v) / 2.6 * (y1 - y0);
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = 'rgba(240,138,75,.10)'; g.fillRect(X(.9), y0, X(RMIN) - X(.9), y1 - y0);
+  g.fillStyle = 'rgba(92,200,240,.07)'; g.fillRect(X(RMIN), y0, x1 - X(RMIN), y1 - y0);
+  g.strokeStyle = 'rgba(160,190,210,.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, Y(0)); g.lineTo(x1, Y(0)); g.stroke();
+  g.strokeStyle = '#e8eef3'; g.lineWidth = 1.5; g.beginPath(); for (let v = .93; v <= 3; v += .01) { const yy = Y(Math.min(1.4, ljU(v))); v === .93 ? g.moveTo(X(v), yy) : g.lineTo(X(v), yy); } g.stroke();
+  g.fillStyle = '#8b9aa9'; g.font = '10px "IBM Plex Mono",monospace'; g.textAlign = 'center';
+  g.fillText('repulsive', (X(.9) + X(RMIN)) / 2 + 4, y0 + 10); g.fillText('attractive', X(2), y0 + 10);
+  g.fillText((RMIN * LJ_SIG_A).toFixed(2) + ' Å', X(RMIN), H - 5); g.fillText('r', x1 - 4, H - 5);
+  g.textAlign = 'right'; g.fillText('0', x0 - 4, Y(0) + 3); g.fillText('−ε', x0 - 4, Y(-1) + 3); g.textAlign = 'left'; g.fillText('U', 2, y0 + 8);
+  g.strokeStyle = 'rgba(160,190,210,.3)'; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(X(RMIN), Y(-1)); g.lineTo(X(RMIN), y1); g.stroke(); g.setLineDash([]);
+  const rr = Math.max(.93, Math.min(3, r)), col = r < RMIN ? '#f08a4b' : '#5cc8f0';
+  g.fillStyle = col; g.beginPath(); g.arc(X(rr), Y(Math.min(1.4, ljU(rr))), 4.5, 0, 6.2832); g.fill();
+}
+function updatePair() {
+  if (!S.sel) return; const [i, j] = S.sel, r = Math.hypot(lab.x[j] - lab.x[i], lab.y[j] - lab.y[i]), rc = Math.max(r, .82), u = ljU(rc), f = ljF(rc);
+  $('pR').textContent = fmt(r * LJ_SIG_A, 2) + ' Å'; $('pU').textContent = fmt(u * LJ_EPS_KJ, 2) + ' kJ/mol'; $('pF').textContent = sgn(f * LJ_F_PN, 2) + ' pN'; $('pF').title = (f * LJ_F_PN * 1e-12).toExponential(2) + ' N, positive = repulsive';
+  const st = Math.abs(u) < .05 && r > RMIN ? 'neg' : r < RMIN ? 'rep' : 'att', el = $('pState');
+  el.className = 'pill ' + st; el.textContent = { neg: 'NEGLIGIBLE', rep: 'REPULSIVE', att: 'ATTRACTIVE' }[st];
+  $('pNote').textContent = { neg: 'Too far apart to feel each other', rep: 'Short-range repulsion', att: 'Attractive interaction' }[st];
+  drawLJ(r);
+}
+
+// ---------- thermodynamic readouts ----------
+function stateTitle(T) { return T < 150 ? 'Slow molecular motion' : T < 600 ? 'Moderate molecular motion' : T < 1500 ? 'High molecular kinetic energy' : 'Very high molecular kinetic energy'; }
+function refresh() {
+  const T = S.T, P = S.P, st = prState(T, P), gas = isFluidGas(st.phase), cr = cpRRHO(T), ci = cpIdeal(T), res = gas ? cpResidual(T, P) : null;
+  $('tO').textContent = T.toFixed(0) + ' K'; $('pO').textContent = (P < 10 ? P.toFixed(1) : P.toFixed(0)) + ' bar';
+  const ke = 1.5 * R * T / 1000, ur = st.Ures / 1000, eth = (hRRHO(T) - R * T) / 1000, dA = meanSpacingA(st.Vm);
+  $('hKE').textContent = fmt(ke, 2) + ' kJ/mol'; $('hU').textContent = fmt(ur, 2) + ' kJ/mol'; $('hE').textContent = fmt(eth + ur, 2) + ' kJ/mol';
+  $('hV').textContent = meanSpeed(T).toFixed(0) + ' m/s'; $('hD').textContent = fmt(dA, 1) + ' Å';
+  $('hCp').textContent = gas ? sgn(100 * res / ci, 1) + ' %' : st.phase;
+  $('stTitle').textContent = stateTitle(T);
+  $('stSub').textContent = st.phase === 'solid' ? 'Below 90.7 K methane is a solid: the molecules lock together.' : st.phase === 'liquid' ? 'At this state methane is a liquid: the molecules stay within reach of each other.' : T < 300 ? 'Intermolecular effects become increasingly relevant.' : 'Phase: ' + st.phase + (T > 3 * TC ? '. Thermal motion dominates the attraction.' : '.');
+  // ladder
+  const kT = T / LJ_EPS_K;
+  $('l1w').textContent = kT < 1 ? 'Molecules move with less energy than the depth of the attraction well.' : kT < 3 ? 'Thermal energy is comparable to the attraction well.' : 'Molecules carry far more energy than the attraction can hold.';
+  $('l1v').innerHTML = `kT = ${fmt(kT, 2)} ε<small>${meanSpeed(T).toFixed(0)} m/s mean speed, well depth ε = ${LJ_EPS_KJ.toFixed(2)} kJ/mol</small>`;
+  $('l2w').textContent = dA / LJ_SIG_A < 2 ? 'Neighbours sit inside the range of the potential nearly all the time.' : dA / LJ_SIG_A < 4 ? 'Molecules are close enough to meet often.' : 'Molecules are far apart and meet rarely.';
+  $('l2v').innerHTML = `${fmt(dA, 1)} Å = ${fmt(dA / LJ_SIG_A, 1)} σ<small>mean spacing between molecules, σ = ${LJ_SIG_A} Å</small>`;
+  $('l3w').textContent = Math.abs(ur) / ke > .3 ? 'Attraction holds a large share of the energy.' : Math.abs(ur) / ke > .03 ? 'Attraction stores a visible share of the energy.' : 'Attraction stores almost none of the energy.';
+  $('l3v').innerHTML = `${fmt(ur, 2)} kJ/mol<small>${fmt(100 * Math.abs(ur) / ke, 1)} % of the translational kinetic energy</small>`;
+  $('l4w').textContent = !gas ? 'Outside the gas region: a gas-phase Cp does not apply.' : res / ci > .05 ? 'Cp departs from the ideal-gas prediction.' : res / ci > .01 ? 'Cp sits slightly above the ideal-gas prediction.' : 'Idealized models converge on the real gas.';
+  $('l4v').innerHTML = gas ? `${sgn(res, 2)} J/mol·K<small>${sgn(100 * res / ci, 1)} % against the ideal gas (${fmt(ci, 1)} J/mol·K)</small>` : `${st.phase}<small>no gas-phase value</small>`;
+  // model panel
+  $('mR').textContent = fmt(cr, 2); $('mS').textContent = T >= SH_LO ? fmt(cpShomate(T), 2) : 'n/a'; $('mG').textContent = gas ? fmt(ci + res, 2) : 'n/a';
+  $('mDev').textContent = gas ? `Residual ${sgn(res, 2)} J/mol·K at ${P.toFixed(P < 10 ? 1 : 0)} bar.` : '';
+  const w = [];
+  if (T < T_TRIPLE) w.push('Below the triple point (90.7 K) methane is solid. The gas-phase curves are a hypothetical ideal gas here.');
+  else if (st.phase === 'liquid') w.push('At this temperature and pressure methane is liquid (Peng-Robinson). The real-gas Cp is not shown.');
+  if (T < SH_LO) w.push('Shomate is fitted from 298 K upward. It is not extrapolated below that; RRHO carries the ideal-gas value.');
+  if (gas && Math.abs(T - TC) < 25 && Math.abs(P - PC) < 20) w.push('Near the critical point (190.6 K, 46 bar) Cp rises steeply and a cubic equation of state loses accuracy.');
+  if (T > 1300) w.push('At these temperatures methane starts to decompose in practice. Every model here assumes no reaction.');
+  $('warns').innerHTML = w.map(t => `<p class="warn"><b>Validity warning</b>${t}</p>`).join('');
+  // worlds
+  $('wAcp').textContent = fmt(cr, 2) + ' J/mol·K'; $('wBcp').textContent = gas ? fmt(ci + res, 2) + ' J/mol·K' : st.phase;
+  $('sameCp').textContent = gas ? `Cp differs by ${sgn(ci + res - cr, 2)} J/mol·K` : 'no longer a gas';
+  lab.setState(T, P); wA.setState(T, P); wB.setState(T, P); drawCp();
+  document.querySelectorAll('#tP button').forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.v - T) < 1));
+  document.querySelectorAll('#pP button').forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.v - P) < .05));
+}
+function setT(T, fromSlider) { S.T = Math.max(50, Math.min(2000, T)); if (!fromSlider) $('tS').value = S.T; refresh(); }
+function setP(P, fromSlider) { S.P = Math.max(1, Math.min(100, P)); if (!fromSlider) $('pS').value = Math.log10(S.P); refresh(); }
+
+// ---------- Cp chart ----------
+const cpC = $('cpc'); let cpV = fit(cpC);
+const CPX = { l: 52, r: 16, t: 16, b: 36 }, CY0 = 30, CY1 = 110;
+function drawCp() {
+  const { g, W, H } = cpV, X = T => CPX.l + (T - 50) / 1950 * (W - CPX.l - CPX.r), Y = c => CPX.t + (CY1 - c) / (CY1 - CY0) * (H - CPX.t - CPX.b);
+  g.clearRect(0, 0, W, H); g.font = '11px "IBM Plex Mono",monospace';
+  g.fillStyle = 'rgba(240,138,75,.05)'; g.fillRect(X(50), CPX.t, X(SH_LO) - X(50), H - CPX.t - CPX.b);
+  g.strokeStyle = 'rgba(140,170,190,.12)'; g.fillStyle = '#8b9aa9'; g.lineWidth = 1;
+  g.textAlign = 'right'; for (let c = 40; c <= 100; c += 20) { g.beginPath(); g.moveTo(CPX.l, Y(c)); g.lineTo(W - CPX.r, Y(c)); g.stroke(); g.fillText(c, CPX.l - 8, Y(c) + 4); }
+  g.textAlign = 'center'; for (const T of [50, 298, 500, 1000, 1500, 2000]) g.fillText(T, X(T), H - CPX.b + 16);
+  g.fillText('Temperature (K)', (CPX.l + W - CPX.r) / 2, H - 6); g.textAlign = 'left'; g.fillText('Cp (J/mol·K)', CPX.l + 6, CPX.t + 12);
+  g.fillStyle = 'rgba(240,138,75,.7)'; g.fillText('Shomate', X(50) + 6, CPX.t + 32); g.fillText('not valid', X(50) + 6, CPX.t + 46);
+  const line = (fn, col, lw, lo, hi, dash) => { g.strokeStyle = col; g.lineWidth = lw; g.setLineDash(dash || []); g.beginPath(); let pen = false;
+    for (let T = lo; T <= hi; T += 5) { const v = fn(T); if (v === null || v > CY1) { pen = false; continue; } pen ? g.lineTo(X(T), Y(v)) : g.moveTo(X(T), Y(v)); pen = true; } g.stroke(); g.setLineDash([]); };
+  line(T => { const s = prState(T, S.P); return isFluidGas(s.phase) ? cpIdeal(T) + cpResidual(T, S.P) : null; }, '#f08a4b', 2.2, 50, 2000);
+  line(cpRRHO, '#5cc8f0', 2, 50, 2000);
+  line(cpShomate, '#e8eef3', 1.4, 300, 2000, [5, 4]);
+  const T = S.T; g.strokeStyle = 'rgba(238,243,247,.55)'; g.lineWidth = 1; g.beginPath(); g.moveTo(X(T), CPX.t); g.lineTo(X(T), H - CPX.b); g.stroke();
+  const dot = (v, col) => { if (v === null || v > CY1) return; g.fillStyle = col; g.beginPath(); g.arc(X(T), Y(v), 4.5, 0, 6.2832); g.fill(); g.strokeStyle = '#0a0d11'; g.lineWidth = 1.5; g.stroke(); };
+  const st = prState(T, S.P); dot(cpRRHO(T), '#5cc8f0'); if (T >= SH_LO) dot(cpShomate(T), '#e8eef3'); if (isFluidGas(st.phase)) dot(cpIdeal(T) + cpResidual(T, S.P), '#f08a4b');
+}
+let dragging = false;
+const cpPick = e => { const r = cpC.getBoundingClientRect(); setT(50 + (e.clientX - r.left - CPX.l) / (cpV.W - CPX.l - CPX.r) * 1950); };
+cpC.addEventListener('pointerdown', e => { dragging = true; cpC.setPointerCapture(e.pointerId); cpPick(e); });
+cpC.addEventListener('pointermove', e => { if (dragging) cpPick(e); });
+cpC.addEventListener('pointerup', () => dragging = false); cpC.addEventListener('pointercancel', () => dragging = false);
+
+// ---------- two worlds ----------
+const wAC = $('wA'), wBC = $('wB'); let wAV = fit(wAC), wBV = fit(wBC);
+const wA = new Sim(10, false, wAV.W / wAV.H), wB = new Sim(10, true, wBV.W / wBV.H);
+const camA = { cx: 0, cy: 0, s: 20 }, camB = { cx: 0, cy: 0, s: 20 };
+
+// ---------- thermal load ----------
+function calcLoad(animate) {
+  const m = Math.max(0, +$('iM').value || 0), T1 = Math.max(50, Math.min(2000, +$('iT1').value || 298.15)), T2 = Math.max(50, Math.min(2000, +$('iT2').value || 298.15)), P = Math.max(1, Math.min(100, +$('iP').value || 1));
+  const L = thermalLoad(m, T1, T2, P), dT = T2 - T1 || 1e-9, kg = 1 / MW; // J/mol -> kJ/kg is x / MW
+  const ideal = L.dShom !== null ? L.dShom : L.dRRHO, rows = [['Shomate', L.qShom, '#e8eef3'], ['RRHO', L.qRRHO, '#5cc8f0'], ['Real gas (PR)', L.qReal, '#f08a4b']];
+  const s1 = prState(T1, P), s2 = prState(T2, P);
+  $('c1').innerHTML = `${fmt(s1.Ures / 1000, 2)} → ${fmt(s2.Ures / 1000, 2)}<small>kJ/mol stored in attraction, inlet → outlet</small>`;
+  $('c2').innerHTML = L.dReal !== null ? `${fmt(ideal / dT, 2)} | ${fmt(L.dReal / dT, 2)}<small>J/mol·K, ideal | real</small>` : `${fmt(ideal / dT, 2)}<small>J/mol·K, ideal gas</small>`;
+  $('c3').innerHTML = L.dReal !== null ? `${fmt(ideal * kg, 1)} | ${fmt(L.dReal * kg, 1)}<small>kJ/kg, ideal | real</small>` : `${fmt(ideal * kg, 1)}<small>kJ/kg, ideal gas</small>`;
+  const ref = L.qShom !== null ? L.qShom : L.qRRHO;
+  $('c4').innerHTML = L.qReal !== null ? `${sgn((L.qReal - ref) / 1e6, 3)} MW<small>real gas minus ideal gas (${sgn(100 * (L.qReal / ref - 1), 2)} %)</small>` : `${fmt(ref / 1e6, 3)} MW<small>ideal gas</small>`;
+  const mx = Math.max(...rows.map(r => Math.abs(r[1] || 0)), 1e-9);
+  $('bars').innerHTML = rows.map(([n, q, c]) => `<div class="bar"><span>Q̇ ${n}</span><div class="track"><div class="fill" style="width:${q === null ? 0 : 100 * Math.abs(q) / mx}%;background:${c}"></div></div><span class="q">${q === null ? 'not available' : fmt(q / 1e6, 3) + ' MW<small>' + (n === 'Shomate' || ref === q ? 'reference' : sgn(100 * (q / ref - 1), 2) + ' %') + '</small>'}</span></div>`).join('');
+  const w = [];
+  if (L.qShom === null) w.push('Shomate is fitted from 298 K upward, so it gives no duty for this range. RRHO is the ideal-gas reference instead.');
+  if (L.qReal === null) w.push(`Methane is ${!isFluidGas(L.ph1) ? L.ph1 + ' at the inlet' : L.ph2 + ' at the outlet'} for this pressure. A gas-phase duty does not apply: the real duty would include a phase change.`);
+  if (Math.max(T1, T2) > 1300) w.push('Above about 1300 K methane starts to decompose in practice. The duty assumes no reaction.');
+  $('loadWarn').innerHTML = w.map(t => `<p class="warn"><b>Validity warning</b>${t}</p>`).join('');
+  if (animate) { const c = $('chain'); c.classList.remove('run'); void c.offsetWidth; c.classList.add('run'); }
+}
+$('loadForm').addEventListener('submit', e => { e.preventDefault(); calcLoad(true); });
+
+// ---------- controls ----------
+for (const v of [50, 100, 200, 298, 500, 1000, 1500, 2000]) { const b = document.createElement('button'); b.type = 'button'; b.textContent = v + ' K'; b.dataset.v = v; b.onclick = () => setT(v); $('tP').append(b); }
+for (const v of [1, 10, 30, 50, 100]) { const b = document.createElement('button'); b.type = 'button'; b.textContent = v + ' bar'; b.dataset.v = v; b.onclick = () => setP(v); $('pP').append(b); }
+$('tS').oninput = e => setT(+e.target.value, true); $('pS').oninput = e => setP(Math.pow(10, +e.target.value), true);
+$('fT').onchange = e => S.forces = e.target.checked; $('playT').checked = S.play; $('playT').onchange = e => S.play = e.target.checked;
+let exp = null;
+$('runBtn').onclick = () => {
+  if (exp) { exp = null; $('runBtn').textContent = 'Run experiment'; return; }
+  S.play = true; $('playT').checked = true;
+  exp = { stops: [50, 100, 200, 298, 500, 1000], i: 0, t0: performance.now(), from: 50 }; setT(50); $('runBtn').textContent = 'Stop experiment';
+};
+function tickExp(now) {
+  if (!exp) return; const dwell = 2200, ramp = 900, el = now - exp.t0;
+  if (el > dwell) { const k = Math.min(1, (el - dwell) / ramp), nx = exp.stops[exp.i + 1];
+    if (nx === undefined) { exp = null; $('runBtn').textContent = 'Run experiment'; return; }
+    setT(exp.stops[exp.i] + (nx - exp.stops[exp.i]) * k); if (k >= 1) { exp.i++; exp.t0 = now; } }
+}
+
+// ---------- loop ----------
+const vis = new Map(); const io = new IntersectionObserver(es => es.forEach(e => vis.set(e.target, e.isIntersecting))); [simC, wAC, wBC].forEach(c => io.observe(c));
+let last = performance.now(), hudT = 0;
+function frame(now) {
+  const dt = Math.min(40, now - last) / 16.7 * 0.03; last = now; tickExp(now);
+  if (vis.get(simC) !== false) {
+    if (S.play) lab.step(dt);
+    const t = camTarget(lab, simV.W, simV.H, S.sel), k = .08; cam.cx += (t.cx - cam.cx) * k; cam.cy += (t.cy - cam.cy) * k; cam.s += (t.s - cam.s) * k;
+    drawScene(simV.g, simV.W, simV.H, lab, cam, { forces: S.forces, sel: S.sel });
+    if (now - hudT > 120) { hudT = now; updatePair(); }
+  }
+  if (vis.get(wAC) !== false || vis.get(wBC) !== false) {
+    if (S.play) { wA.step(dt); wB.step(dt); }
+    Object.assign(camA, camTarget(wA, wAV.W, wAV.H)); Object.assign(camB, camTarget(wB, wBV.W, wBV.H));
+    drawScene(wAV.g, wAV.W, wAV.H, wA, camA, { forces: false }); drawScene(wBV.g, wBV.W, wBV.H, wB, camB, { forces: true });
+  }
+  requestAnimationFrame(frame);
+}
+addEventListener('resize', () => { simV = fit(simC); cpV = fit(cpC); wAV = fit(wAC); wBV = fit(wBC); if (S.sel) ljV = fit($('ljc')); drawCp(); });
+$('pS').value = Math.log10(S.P); $('tS').value = S.T;
+refresh(); lab.setBox(true); wA.setBox(true); wB.setBox(true); Object.assign(cam, camTarget(lab, simV.W, simV.H)); calcLoad(false);
+for (let i = 0; i < 60; i++) { lab.step(0.03); wA.step(0.03); wB.step(0.03); }
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawCp);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
